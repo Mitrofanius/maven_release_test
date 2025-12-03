@@ -7,8 +7,10 @@ on:
         type: boolean
 
 jobs:
-  say_hi:
-    run: echo "hi"
+    say_hi:
+      runs-on: ubuntu-latest
+      steps:
+        - run: echo "hi"
 #  run_build:
 #    uses: <...>
 #    secrets: <...>
