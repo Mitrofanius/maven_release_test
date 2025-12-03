@@ -7,10 +7,25 @@ on:
         type: boolean
 
 jobs:
-    say_hi:
+    release-prepare:
       runs-on: ubuntu-latest
       steps:
-        - run: echo "hi"
+        - name: Checkout
+          uses: actions/checkout@v6
+          with:
+            token: ${{ secrets.GITHUB_TOKEN }}
+
+        - name: Set release version in pom.xml
+          run: |
+            mvn versions:set -DnewVersion=1.0.1
+
+        - name: Commit release version
+          run: |
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -m "Release version 1.0.1" # change for var version later
+            git push origin master
+
 #  run_build:
 #    uses: <...>
 #    secrets: <...>
