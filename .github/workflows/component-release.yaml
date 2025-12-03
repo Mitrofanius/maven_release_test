@@ -1,0 +1,19 @@
+name: component-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip-unit-tests:
+        type: boolean
+
+#jobs:
+#  run_build:
+#    uses: <...>
+#    secrets: <...>
+#
+#    permissions:
+#      <...>
+#
+#    with:
+#      skip-unit-tests: "${{ inputs.skip-unit-tests == true }}"
+#
