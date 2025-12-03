@@ -6,7 +6,9 @@ on:
       skip-unit-tests:
         type: boolean
 
-#jobs:
+jobs:
+  say_hi:
+    run: echo "hi"
 #  run_build:
 #    uses: <...>
 #    secrets: <...>
