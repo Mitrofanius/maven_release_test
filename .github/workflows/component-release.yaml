@@ -6,6 +6,9 @@ on:
       skip-unit-tests:
         type: boolean
 
+permissions:
+  contents: write
+
 jobs:
     release-prepare:
       runs-on: ubuntu-latest
