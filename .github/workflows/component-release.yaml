@@ -17,12 +17,13 @@ jobs:
 
         - name: Set release version in pom.xml
           run: |
-            mvn versions:set -DnewVersion=1.0.1
+            mvn versions:set -DnewVersion=1.0.1 -DgenerateBackupPoms=false
 
         - name: Commit release version
           run: |
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add pom.xml # later add changelog
             git commit -m "Release version 1.0.1" # change for var version later
             git push origin master
 
