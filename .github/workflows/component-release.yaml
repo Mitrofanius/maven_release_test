@@ -32,7 +32,7 @@ jobs:
             git config user.email "github-actions[bot]@users.noreply.github.com" # or take user's email
             git add pom.xml
             git commit -m "Prepare for development of next version"
-            git push origin main
+            git push origin master
 
 #  run_build:
 #    uses: <...>
