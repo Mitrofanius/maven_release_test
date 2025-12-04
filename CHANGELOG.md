@@ -1,3 +1,5 @@
+## {{NEW_RELEASE_VERSION_PLACEHOLDER}}
+
 ## 1.1.0
 
 ## 1.0.2
