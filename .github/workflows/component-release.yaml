@@ -28,6 +28,8 @@ jobs:
 
         - name: Commit next snapshot version
           run: |
+            git config user.name "github-actions[bot]" # or take user's name
+            git config user.email "github-actions[bot]@users.noreply.github.com" # or take user's email
             git add pom.xml
             git commit -m "Prepare for development of next version"
             git push origin main
