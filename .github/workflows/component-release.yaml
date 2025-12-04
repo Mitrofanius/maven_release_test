@@ -5,6 +5,9 @@ on:
     inputs:
       skip-unit-tests:
         type: boolean
+      new-version:
+        type: string # major/minor/patch checkboxes or add validation for string
+        required: true
 
 permissions:
   contents: write
@@ -18,17 +21,16 @@ jobs:
           with:
             token: ${{ secrets.GITHUB_TOKEN }}
 
-        - name: Set release version in pom.xml
+        # Post-release steps
+        - name: Set next snapshot version
           run: |
-            mvn versions:set -DnewVersion=1.0.1 -DgenerateBackupPoms=false
+            mvn versions:set -DnewVersion="${{ inputs.new-version }}-SNAPSHOT" -DgenerateBackupPoms=false
 
-        - name: Commit release version
+        - name: Commit next snapshot version
           run: |
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add pom.xml # later add changelog
-            git commit -m "Release version 1.0.1" # change for var version later
-            git push origin master
+            git add pom.xml
+            git commit -m "Prepare for development of next version"
+            git push origin main
 
 #  run_build:
 #    uses: <...>
