@@ -118,7 +118,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
-          gh pr create --title "Release ${{ steps.version.outputs.release_version }}" --base main --head $TEMP_BRANCH
+          gh pr create --title "Release ${{ steps.version.outputs.release_version }}" --body "This PR was automatically created by GitHub Actions workflow" --base main --head $TEMP_BRANCH
 #            --body "This PR was automatically created by GitHub Actions workflow" \
 
       - name: Merge Pull Request
