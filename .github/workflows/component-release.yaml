@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   release:
@@ -119,6 +120,7 @@ jobs:
         run: |
           gh pr create \
             --title "Release ${{ steps.version.outputs.release_version }}" \
+            --body "This PR was automatically created by GitHub Actions workflow" \
             --base main \
             --head $TEMP_BRANCH
 
