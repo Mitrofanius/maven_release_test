@@ -24,8 +24,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+#        with:
+#          token: ${{ secrets.GITHUB_TOKEN }}
 
+        # Pre-release steps: infer version, modify pom and changelog:
+        # Remove -SNAPSHOT suffix from version in pom, swap placeholder to version in changelog
       - name: Infer release and next development version from increase type
         id: version
         run: |
@@ -61,15 +66,15 @@ jobs:
           VERSION="${{ steps.version.outputs.release_version }}"
           perl -pi -e "s/## \{\{NEW_RELEASE_VERSION_PLACEHOLDER\}\}/## $VERSION/" CHANGELOG.md
 
-
       - name: Commit release version
         run: |
           git config user.name "github-actions[bot]" # or take user's name
           git config user.email "github-actions[bot]@users.noreply.github.com" # or take user's email
           git add pom.xml CHANGELOG.md
-          git commit -m "Release version ${{ steps.version.outputs.release_version }}"
+          git commit -m "release ${{ steps.version.outputs.release_version }}"
           git push origin master
 
+        # Release: create tag, release
       - name: Create and push tag
         run: |
           VERSION="${{ steps.version.outputs.release_version }}"
@@ -78,12 +83,16 @@ jobs:
 
       - name: Create github release
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+#        env:
+#          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.version.outputs.release_version }}"
           gh release create "v$VERSION" \
             --title "Release $VERSION" \
-      # Post-release steps
+
+      # Post-release steps: modify pom and changelog for further development:
+      # return -SNAPSHOT suffix to pom and placeholder to changelog
       - name: Set next snapshot version
         run: |
           mvn versions:set -DnewVersion="${{ steps.version.outputs.next_version }}-SNAPSHOT" -DgenerateBackupPoms=false
@@ -98,7 +107,7 @@ jobs:
           git config user.name "github-actions[bot]" # or take user's name
           git config user.email "github-actions[bot]@users.noreply.github.com" # or take user's email
           git add pom.xml CHANGELOG.md
-          git commit -m "Prepare for development of next version"
+          git commit -m "post-release/${{ steps.version.outputs.next_version }}"
           git push origin master
 
 #  run_build:
