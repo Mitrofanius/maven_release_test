@@ -125,7 +125,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
-          gh pr merge $TEMP_BRANCH --delete-branch
+          gh pr --merge $TEMP_BRANCH --delete-branch
 
       # Release: create tag, release
       - name: Create and push tag
