@@ -1,4 +1,4 @@
-## {{NEW_RELEASE_VERSION_PLACEHOLDER}}
+## 2.1.1
 
 ## 2.1.0
 
