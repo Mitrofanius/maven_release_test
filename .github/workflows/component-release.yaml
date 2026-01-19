@@ -138,13 +138,7 @@ jobs:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
           VERSION="${{ needs.prepare-release.outputs.release_version }}"
-#          gh release create "release/$VERSION" \
-#            --title "release/$VERSION" \
-
-          # Extract the content for this version from CHANGELOG.md
-          # Gets everything between "## VERSION" and the next "##" heading
           CHANGELOG_ENTRY=$(sed -n "/## $VERSION/,/^## /p" CHANGELOG.md | sed '1d;$d' | sed '/^$/d')
-               
           gh release create "release/$VERSION" \
             --title "release/$VERSION" \
             --notes "$CHANGELOG_ENTRY" \
