@@ -17,8 +17,12 @@ permissions:
   pull-requests: write
 
 jobs:
-  release:
+  prepare-release:
     runs-on: ubuntu-latest
+    outputs:
+      release_version: ${{ steps.version.outputs.release_version }}
+      next_version: ${{ steps.version.outputs.next_version }}
+      release_branch: ${{ steps.branch.outputs.release_branch }}
     steps:
       - name: Generate a token
         id: generate-token
@@ -35,8 +39,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      # Pre-release steps: infer version, modify pom and changelog:
-      # Remove -SNAPSHOT suffix from version in pom, swap placeholder to version in changelog
       - name: Infer release and next development version from increase type
         id: version
         run: |
@@ -66,10 +68,11 @@ jobs:
           echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
           echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Create and checkout temp branch
+      - name: Create and checkout release branch
+        id: branch
         run: |
           BRANCH_NAME="release/${{ steps.version.outputs.release_version }}"
-          echo "TEMP_BRANCH=$BRANCH_NAME" >> $GITHUB_ENV
+          echo "release_branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
           git checkout -b $BRANCH_NAME
 
       - name: Set release version in pom.xml
@@ -83,17 +86,93 @@ jobs:
 
       - name: Commit release version
         run: |
-          git config user.name "github-actions[bot]" # or take user's name
-          git config user.email "github-actions[bot]@users.noreply.github.com" # or take user's email
           git add pom.xml CHANGELOG.md
-          git commit -m "release/${{ steps.version.outputs.release_version }}"
-          git push origin master
+          git commit -m "release ${{ steps.version.outputs.release_version }}"
+          git push origin ${{ steps.branch.outputs.release_branch }}
 
-      # Post-release steps: modify pom and changelog for further development:
-      # return -SNAPSHOT suffix to pom and placeholder to changelog
+      - name: Create Release Pull Request
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          gh pr create \
+            --title "release ${{ steps.version.outputs.release_version }}" \
+            --body "This PR prepares release ${{ steps.version.outputs.release_version }}" \
+            --base master \
+            --head ${{ steps.branch.outputs.release_branch }}
+
+      - name: Merge Release Pull Request
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          gh pr merge --rebase ${{ steps.branch.outputs.release_branch }} --delete-branch
+
+  build-release:
+    needs: prepare-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: master
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push tag
+        run: |
+          VERSION="${{ needs.prepare-release.outputs.release_version }}"
+          git tag "release/$VERSION"
+          git push origin "release/$VERSION"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          VERSION="${{ needs.prepare-release.outputs.release_version }}"
+          gh release create "release/$VERSION" \
+            --title "release/$VERSION" \
+            --generate-notes
+
+  post-release:
+    needs: [prepare-release, build-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: master
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and checkout post-release branch
+        id: branch
+        run: |
+          BRANCH_NAME="post-release/${{ needs.prepare-release.outputs.release_version }}"
+          echo "post_release_branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          git checkout -b $BRANCH_NAME
+
       - name: Set next snapshot version
         run: |
-          mvn versions:set -DnewVersion="${{ steps.version.outputs.next_version }}-SNAPSHOT" -DgenerateBackupPoms=false
+          mvn versions:set -DnewVersion="${{ needs.prepare-release.outputs.next_version }}-SNAPSHOT" -DgenerateBackupPoms=false
 
       - name: Add new changelog placeholder
         run: |
@@ -102,56 +181,22 @@ jobs:
 
       - name: Commit next snapshot version
         run: |
-          git config user.name "github-actions[bot]" # or take user's name
-          git config user.email "github-actions[bot]@users.noreply.github.com" # or take user's email
           git add pom.xml CHANGELOG.md
-          git commit -m "post-release/${{ steps.version.outputs.release_version }}"
-          git push origin master
+          git commit -m "post-release/${{ needs.prepare-release.outputs.release_version }}"
+          git push origin ${{ steps.branch.outputs.post_release_branch }}
 
-      - name: Push temp branch
-        run: |
-          git push origin $TEMP_BRANCH
-
-      - name: Create Pull Request
+      - name: Create Post-Release Pull Request
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
-          gh pr create --title "release ${{ steps.version.outputs.release_version }}" --body "This PR was automatically created by GitHub Actions workflow" --base master --head $TEMP_BRANCH
-#            --body "This PR was automatically created by GitHub Actions workflow" \
+          gh pr create \
+            --title "Post-release: Set next development version ${{ needs.prepare-release.outputs.next_version }}-SNAPSHOT" \
+            --body "This PR sets up the next development version after release ${{ needs.prepare-release.outputs.release_version }}" \
+            --base master \
+            --head ${{ steps.branch.outputs.post_release_branch }}
 
-      - name: Merge Pull Request
+      - name: Merge Post-Release Pull Request
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
-          gh pr merge --rebase $TEMP_BRANCH --delete-branch
-
-      # Release: create tag, release
-      - name: Create and push tag
-        run: |
-          VERSION="${{ steps.version.outputs.release_version }}"
-          git tag "release/$VERSION" HEAD~1
-          git push origin "release/$VERSION"
-
-      #          cleanup: delete temp release branch (something failed - ok, stop here)
-      #          cleanup: delete temp release branch (it's ok? - good, continue to tag)
-
-      - name: Create github release
-        env:
-          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
-        run: |
-          VERSION="${{ steps.version.outputs.release_version }}"
-          gh release create "release/$VERSION" \
-            --title "release/$VERSION" \
-          
-          
-
-#  run_build:
-#    uses: <...>
-#    secrets: <...>
-#
-#    permissions:
-#      <...>
-#
-#    with:
-#      skip-unit-tests: "${{ inputs.skip-unit-tests == true }}"
-#
+          gh pr merge --rebase ${{ steps.branch.outputs.post_release_branch }} --delete-branch
