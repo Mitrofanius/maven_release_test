@@ -1,16 +1,7 @@
 name: component-release
 
 on:
-  workflow_dispatch:
-    inputs:
-      version-increase-type:
-        description: 'SemVer version increase type'
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
-        required: true
+  pull_request:
 
 permissions:
   contents: write
@@ -24,6 +15,10 @@ jobs:
       next_version: ${{ steps.version.outputs.next_version }}
       release_branch: ${{ steps.branch.outputs.release_branch }}
     steps:
+      - name: Debug actor
+        run: echo "github.actor=${{ github.actor }}"
+
+
       - name: Generate a token
         id: generate-token
         uses: actions/create-github-app-token@v2
@@ -47,26 +42,15 @@ jobs:
           
           IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
           
-          case "${{ inputs.version-increase-type }}" in
-          major)
-           RELEASE_VERSION="$((major + 1)).0.0"
-           NEXT_VERSION="$((major + 1)).0.1"
-           ;;
-          minor)
-           RELEASE_VERSION="${major}.$((minor + 1)).0"
-           NEXT_VERSION="${major}.$((minor + 1)).1"
-           ;;
-          patch)
-           RELEASE_VERSION=$CURRENT_VERSION
-           NEXT_VERSION="${major}.${minor}.$((patch + 1))"
-           ;;
-          esac
-          
+          RELEASE_VERSION=$CURRENT_VERSION
+          NEXT_VERSION="${major}.${minor}.$((patch + 1))"
+
           echo "release_version=$RELEASE_VERSION"
           echo "next_version=$NEXT_VERSION"
           
           echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
           echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
+
 
       - name: Create and checkout release branch
         id: branch
@@ -97,7 +81,7 @@ jobs:
           gh pr create \
             --title "release ${{ steps.version.outputs.release_version }}" \
             --body "This PR prepares release ${{ steps.version.outputs.release_version }}" \
-            --base master \
+            --base test-workflow-on-push \
             --head ${{ steps.branch.outputs.release_branch }}
 
       - name: Merge Release Pull Request
@@ -120,7 +104,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: master
+          ref: test-workflow-on-push
 
       - name: Configure Git
         run: |
@@ -147,7 +131,7 @@ jobs:
             --generate-notes
 
   post-release:
-    needs: [prepare-release, build-release]
+    needs: [ prepare-release, build-release ]
     runs-on: ubuntu-latest
     steps:
       - name: Generate a token
@@ -160,7 +144,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: master
+          ref: test-workflow-on-push
 
       - name: Configure Git
         run: |
@@ -196,7 +180,7 @@ jobs:
           gh pr create \
             --title "Post-release: Set next development version ${{ needs.prepare-release.outputs.next_version }}-SNAPSHOT" \
             --body "This PR sets up the next development version after release ${{ needs.prepare-release.outputs.release_version }}" \
-            --base master \
+            --base test-workflow-on-push \
             --head ${{ steps.branch.outputs.post_release_branch }}
 
       - name: Merge Post-Release Pull Request
