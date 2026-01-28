@@ -1,16 +1,5 @@
 name: component-release
 
-#on:
-#  workflow_dispatch:
-#    inputs:
-#      version-increase-type:
-#        description: 'SemVer version increase type'
-#        type: choice
-#        options:
-#          - patch
-#          - minor
-#          - major
-#        required: true
 on:
   pull_request:
 
@@ -49,21 +38,6 @@ jobs:
           
           IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
           
-#          case "${{ inputs.version-increase-type }}" in
-#          major)
-#           RELEASE_VERSION="$((major + 1)).0.0"
-#           NEXT_VERSION="$((major + 1)).0.1"
-#           ;;
-#          minor)
-#           RELEASE_VERSION="${major}.$((minor + 1)).0"
-#           NEXT_VERSION="${major}.$((minor + 1)).1"
-#           ;;
-#          patch)
-#           RELEASE_VERSION=$CURRENT_VERSION
-#           NEXT_VERSION="${major}.${minor}.$((patch + 1))"
-#           ;;
-#          esac
-
           RELEASE_VERSION=$CURRENT_VERSION
           NEXT_VERSION="${major}.${minor}.$((patch + 1))"
 
