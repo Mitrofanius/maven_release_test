@@ -9,12 +9,18 @@ permissions:
 
 jobs:
   prepare-release:
+    if: github.actor != 'maven-release-automation[bot]'
+
     runs-on: ubuntu-latest
     outputs:
       release_version: ${{ steps.version.outputs.release_version }}
       next_version: ${{ steps.version.outputs.next_version }}
       release_branch: ${{ steps.branch.outputs.release_branch }}
     steps:
+      - name: Debug actor
+        run: echo "github.actor=${{ github.actor }}"
+
+
       - name: Generate a token
         id: generate-token
         uses: actions/create-github-app-token@v2
@@ -70,7 +76,7 @@ jobs:
           git commit -m "release ${{ steps.version.outputs.release_version }}"
           git push origin ${{ steps.branch.outputs.release_branch }}
 
-      - name: Create Release Pull Request
+      - name: Create and merge Release Pull Request
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
@@ -79,11 +85,9 @@ jobs:
             --body "This PR prepares release ${{ steps.version.outputs.release_version }}" \
             --base test-workflow-on-push \
             --head ${{ steps.branch.outputs.release_branch }}
-
-      - name: Merge Release Pull Request
-        env:
-          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
-        run: |
+          
+          git fetch --all
+          
           gh pr merge --rebase ${{ steps.branch.outputs.release_branch }} --delete-branch
 
   build-release:
@@ -127,7 +131,7 @@ jobs:
             --generate-notes
 
   post-release:
-    needs: [prepare-release, build-release]
+    needs: [ prepare-release, build-release ]
     runs-on: ubuntu-latest
     steps:
       - name: Generate a token
