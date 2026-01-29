@@ -1,4 +1,4 @@
-## {{NEW_RELEASE_VERSION_PLACEHOLDER}}
+## 3.0.2
 
 blablabla
 blabla
