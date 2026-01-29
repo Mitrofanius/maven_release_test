@@ -1,3 +1,5 @@
+## {{NEW_RELEASE_VERSION_PLACEHOLDER}}
+
 ## 6.0.0
 
     * Here are my notes to the changes in this version.
