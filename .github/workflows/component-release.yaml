@@ -91,12 +91,6 @@ jobs:
       # BUILD & PUBLISH RELEASE
       # ============================================================
 
-      - name: Checkout main branch
-        uses: actions/checkout@v6
-        with:
-          ref: test-workflow-on-push
-          token: ${{ steps.generate-token.outputs.token }}
-
       - name: Create and push tag
         run: |
           VERSION="${{ steps.version.outputs.release_version }}"
