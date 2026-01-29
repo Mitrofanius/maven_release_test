@@ -1,28 +1,17 @@
 name: component-release
 
 on:
-  workflow_dispatch:
-    inputs:
-      version-increase-type:
-        description: 'SemVer version increase type'
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
-        required: true
+  pull_request:
 
 permissions:
   contents: write
   pull-requests: write
 
 jobs:
-  prepare-release:
+  release:
+    if: github.actor != 'maven-release-automation[bot]'
     runs-on: ubuntu-latest
-    outputs:
-      release_version: ${{ steps.version.outputs.release_version }}
-      next_version: ${{ steps.version.outputs.next_version }}
-      release_branch: ${{ steps.branch.outputs.release_branch }}
+
     steps:
       - name: Generate a token
         id: generate-token
@@ -33,13 +22,19 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
 
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Infer release and next development version from increase type
+      # ============================================================
+      # PREPARE RELEASE
+      # ============================================================
+
+      - name: Infer release and next development version
         id: version
         run: |
           CURRENT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout | sed 's/-SNAPSHOT//')
@@ -47,21 +42,9 @@ jobs:
           
           IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
           
-          case "${{ inputs.version-increase-type }}" in
-          major)
-           RELEASE_VERSION="$((major + 1)).0.0"
-           NEXT_VERSION="$((major + 1)).0.1"
-           ;;
-          minor)
-           RELEASE_VERSION="${major}.$((minor + 1)).0"
-           NEXT_VERSION="${major}.$((minor + 1)).1"
-           ;;
-          patch)
-           RELEASE_VERSION=$CURRENT_VERSION
-           NEXT_VERSION="${major}.${minor}.$((patch + 1))"
-           ;;
-          esac
-          
+          RELEASE_VERSION=$CURRENT_VERSION
+          NEXT_VERSION="${major}.${minor}.$((patch + 1))"
+
           echo "release_version=$RELEASE_VERSION"
           echo "next_version=$NEXT_VERSION"
           
@@ -69,7 +52,7 @@ jobs:
           echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
 
       - name: Create and checkout release branch
-        id: branch
+        id: release-branch
         run: |
           BRANCH_NAME="release/${{ steps.version.outputs.release_version }}"
           echo "release_branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
@@ -88,48 +71,35 @@ jobs:
         run: |
           git add pom.xml CHANGELOG.md
           git commit -m "release ${{ steps.version.outputs.release_version }}"
-          git push origin ${{ steps.branch.outputs.release_branch }}
+          git push --set-upstream origin ${{ steps.release-branch.outputs.release_branch }}
 
-      - name: Create Release Pull Request
+      - name: Create and merge Release Pull Request
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
           gh pr create \
             --title "release ${{ steps.version.outputs.release_version }}" \
             --body "This PR prepares release ${{ steps.version.outputs.release_version }}" \
-            --base master \
-            --head ${{ steps.branch.outputs.release_branch }}
+            --base test-workflow-on-push \
+            --head ${{ steps.release-branch.outputs.release_branch }}
+          
+          git fetch --all
+          
+          gh pr merge --rebase ${{ steps.release-branch.outputs.release_branch }} --delete-branch
 
-      - name: Merge Release Pull Request
-        env:
-          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
-        run: |
-          gh pr merge --rebase ${{ steps.branch.outputs.release_branch }} --delete-branch
+      # ============================================================
+      # BUILD & PUBLISH RELEASE
+      # ============================================================
 
-  build-release:
-    needs: prepare-release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Generate a token
-        id: generate-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - name: Checkout
+      - name: Checkout main branch
         uses: actions/checkout@v6
         with:
-          ref: master
-
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          ref: test-workflow-on-push
+          token: ${{ steps.generate-token.outputs.token }}
 
       - name: Create and push tag
         run: |
-          VERSION="${{ needs.prepare-release.outputs.release_version }}"
+          VERSION="${{ steps.version.outputs.release_version }}"
           git tag "release/$VERSION"
           git push origin "release/$VERSION"
 
@@ -137,7 +107,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
-          VERSION="${{ needs.prepare-release.outputs.release_version }}"
+          VERSION="${{ steps.version.outputs.release_version }}"
           # Extract the content for this version from CHANGELOG.md
           # Gets everything between "## VERSION" and the next "##" heading
           CHANGELOG_ENTRY=$(sed -n "/## $VERSION/,/^## /p" CHANGELOG.md | sed '1d;$d' | sed '/^$/d')
@@ -146,37 +116,20 @@ jobs:
             --notes "$CHANGELOG_ENTRY" \
             --generate-notes
 
-  post-release:
-    needs: [prepare-release, build-release]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Generate a token
-        id: generate-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: master
-
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+      # ============================================================
+      # POST-RELEASE (NEXT DEVELOPMENT VERSION)
+      # ============================================================
 
       - name: Create and checkout post-release branch
-        id: branch
+        id: post-release-branch
         run: |
-          BRANCH_NAME="post-release/${{ needs.prepare-release.outputs.release_version }}"
+          BRANCH_NAME="post-release/${{ steps.version.outputs.release_version }}"
           echo "post_release_branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
           git checkout -b $BRANCH_NAME
 
       - name: Set next snapshot version
         run: |
-          mvn versions:set -DnewVersion="${{ needs.prepare-release.outputs.next_version }}-SNAPSHOT" -DgenerateBackupPoms=false
+          mvn versions:set -DnewVersion="${{ steps.version.outputs.next_version }}-SNAPSHOT" -DgenerateBackupPoms=false
 
       - name: Add new changelog placeholder
         run: |
@@ -186,21 +139,21 @@ jobs:
       - name: Commit next snapshot version
         run: |
           git add pom.xml CHANGELOG.md
-          git commit -m "post-release/${{ needs.prepare-release.outputs.release_version }}"
-          git push origin ${{ steps.branch.outputs.post_release_branch }}
+          git commit -m "post-release/${{ steps.version.outputs.release_version }}"
+          git push --set-upstream origin ${{ steps.post-release-branch.outputs.post_release_branch }}
 
       - name: Create Post-Release Pull Request
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
           gh pr create \
-            --title "Post-release: Set next development version ${{ needs.prepare-release.outputs.next_version }}-SNAPSHOT" \
-            --body "This PR sets up the next development version after release ${{ needs.prepare-release.outputs.release_version }}" \
-            --base master \
-            --head ${{ steps.branch.outputs.post_release_branch }}
+            --title "Post-release: Set next development version ${{ steps.version.outputs.next_version }}-SNAPSHOT" \
+            --body "This PR sets up the next development version after release ${{ steps.version.outputs.release_version }}" \
+            --base test-workflow-on-push \
+            --head ${{ steps.post-release-branch.outputs.post_release_branch }}
 
       - name: Merge Post-Release Pull Request
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
-          gh pr merge --rebase ${{ steps.branch.outputs.post_release_branch }} --delete-branch
+          gh pr merge --rebase ${{ steps.post-release-branch.outputs.post_release_branch }} --delete-branch
