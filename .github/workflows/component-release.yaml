@@ -8,7 +8,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  prepare-release:
+  prepare-release-post:
     if: github.actor != 'maven-release-automation[bot]'
 
     runs-on: ubuntu-latest
@@ -16,11 +16,8 @@ jobs:
       release_version: ${{ steps.version.outputs.release_version }}
       next_version: ${{ steps.version.outputs.next_version }}
       release_branch: ${{ steps.branch.outputs.release_branch }}
+
     steps:
-      - name: Debug actor
-        run: echo "github.actor=${{ github.actor }}"
-
-
       - name: Generate a token
         id: generate-token
         uses: actions/create-github-app-token@v2
@@ -36,6 +33,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+#      Prepare changlelog and pom for release
       - name: Infer release and next development version from increase type
         id: version
         run: |
@@ -55,7 +53,7 @@ jobs:
 
 
       - name: Create and checkout release branch
-        id: branch
+        id: release-branch
         run: |
           BRANCH_NAME="release/${{ steps.version.outputs.release_version }}"
           echo "release_branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
@@ -90,16 +88,7 @@ jobs:
           
           gh pr merge --rebase ${{ steps.branch.outputs.release_branch }} --delete-branch
 
-  build-release:
-    needs: prepare-release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Generate a token
-        id: generate-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+#       Publish release
 
       - name: Checkout
         uses: actions/checkout@v6
@@ -130,29 +119,10 @@ jobs:
             --notes "$CHANGELOG_ENTRY" \
             --generate-notes
 
-  post-release:
-    needs: [ prepare-release, build-release ]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Generate a token
-        id: generate-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: test-workflow-on-push
-
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+#       Post-release branch cleanup
 
       - name: Create and checkout post-release branch
-        id: branch
+        id: post-release-branch
         run: |
           BRANCH_NAME="post-release/${{ needs.prepare-release.outputs.release_version }}"
           echo "post_release_branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
