@@ -1,3 +1,5 @@
+## {{NEW_RELEASE_VERSION_PLACEHOLDER}}
+
 ## 4.0.0
 
 ## 3.0.1
