@@ -1,5 +1,8 @@
 ## {{NEW_RELEASE_VERSION_PLACEHOLDER}}
 
+    * Here are my notes to the changes in this version.
+    There are many changes. Like for real.
+
 ## 5.0.0
 
 ## 4.0.0
