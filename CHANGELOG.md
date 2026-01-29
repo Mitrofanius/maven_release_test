@@ -1,3 +1,5 @@
+## {{NEW_RELEASE_VERSION_PLACEHOLDER}}
+
 ## 5.0.1
 
     * Here are my notes to the changes in this version.
